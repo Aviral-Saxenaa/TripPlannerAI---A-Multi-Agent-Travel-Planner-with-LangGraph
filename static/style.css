@@ -1042,58 +1042,6 @@ button {
   padding: 8px 10px;
 }
 
-/* Refine Strip */
-.dossier-refine-strip {
-  background: var(--paper-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 6px 10px;
-  box-shadow: var(--shadow-sm);
-}
-
-.dossier-refine-form {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.refine-icon {
-  color: var(--emerald);
-  margin-left: 8px;
-}
-
-.dossier-refine-input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  outline: none;
-  font-size: 0.94rem;
-  color: var(--ink);
-  padding: 6px 0;
-}
-
-.dossier-refine-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--emerald);
-  color: #fff;
-  padding: 7px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 0.82rem;
-  font-weight: 600;
-  transition: background 0.15s;
-}
-
-.dossier-refine-btn:hover:not(:disabled) {
-  background: #143d29;
-}
-
-.dossier-refine-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* Live Agent Banner */
 .live-agent-banner {
   background: var(--paper-elevated);
@@ -1370,7 +1318,6 @@ button {
   .grain-layer,
   .topbar,
   .dossier-command-bar,
-  .dossier-refine-strip,
   .live-agent-banner,
   .dossier-tabs-nav,
   .site-footer {

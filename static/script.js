@@ -170,7 +170,6 @@ function App() {
   const [streamedAnswer, setStreamedAnswer] = useState("");
   const [completedPlan, setCompletedPlan] = useState(null);
   const [copied, setCopied] = useState(false);
-  const [followup, setFollowup] = useState("");
 
   const inputRef = useRef(null);
   const documentRef = useRef(null);
@@ -326,15 +325,6 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleFollowup = (e) => {
-    e.preventDefault();
-    if (!followup.trim()) return;
-    const combined = `${activeQuery} — Refinement: ${followup.trim()}`;
-    setMessage(combined);
-    setFollowup("");
-    submitPlan(combined);
   };
 
   const copyPlan = async () => {
@@ -661,25 +651,6 @@ function App() {
                 <SvgIcon name={fullscreen ? "minimize" : "maximize"} size={15} />
               </button>
             </div>
-          </div>
-
-          {/* Quick Refine Input Bar directly at top */}
-          <div className="dossier-refine-strip">
-            <form onSubmit={handleFollowup} className="dossier-refine-form">
-              <span className="refine-icon"><SvgIcon name="sparkles" size={16} /></span>
-              <input
-                type="text"
-                className="dossier-refine-input"
-                value={followup}
-                onChange={(e) => setFollowup(e.target.value)}
-                placeholder="Ask follow-up or refine (e.g. Focus on vegetarian cuisine, add budget options under $100/night...)"
-                disabled={loading}
-              />
-              <button type="submit" className="dossier-refine-btn" disabled={loading || !followup.trim()}>
-                <span>Refine</span>
-                <SvgIcon name="arrowRight" size={13} />
-              </button>
-            </form>
           </div>
 
           {/* Error Notification */}
