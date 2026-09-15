@@ -1,16 +1,9 @@
-from tools.tavily_tool import tavily_search
-from tools.flight_tool import search_flights
-from backend import run_travel_agent
+import asyncio
+from mcp_client_test import get_all_tools, tavily_mcp_search
+# from mcp_client_test import get_all_tools
 
-# res = search_flights("Plan a 7 days Japan trip from Bangladesh")
-# print(res)
 
-user_input = input("enter travel request\n")
 
-response= run_travel_agent(
-    user_input=user_input,
-    thread_id="test-user"
-)
-
-print("FINAL RESPONSE \n")
-print(response["answer"])
+if __name__ == "__main__":
+    query="last football world cup match played"
+    asyncio.run(tavily_mcp_search(query))
