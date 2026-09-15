@@ -66,15 +66,19 @@ except ImportError:
 # ==========================================================
 # STRICT TOKEN BUDGET CONFIGURATION (Total stays well under 8000)
 # ==========================================================
-FLIGHT_OUTPUT_TOKENS = 600
-ITINERARY_OUTPUT_TOKENS = 1800
-FINAL_OUTPUT_TOKENS = 4096
+FLIGHT_OUTPUT_TOKENS = 500
+ITINERARY_OUTPUT_TOKENS = 1000
+FINAL_OUTPUT_TOKENS = 2200
+MAX_TOTAL_OUTPUT_TOKENS = FLIGHT_OUTPUT_TOKENS + ITINERARY_OUTPUT_TOKENS + FINAL_OUTPUT_TOKENS
 
 # Input payload compression limits (characters)
 AIRPORT_DATA_LIMIT = 1200
 AIRLINE_DATA_LIMIT = 1200
-HOTEL_DATA_LIMIT = 2000
-WEATHER_DATA_LIMIT = 800
+HOTEL_DATA_LIMIT = 1400
+WEATHER_DATA_LIMIT = 600
+ITINERARY_CONTEXT_LIMIT = 1400
+FINAL_CONTEXT_LIMIT = 1800
+USER_QUERY_LIMIT = 1200
 
 def compact_data(value: object, limit: int = 1500) -> str:
     """Preserve informative content while aggressively eliminating token waste."""
@@ -128,16 +132,14 @@ FLIGHT_AGENT_PROMPT = """You are an elite international flight specialist.
 User Query: {query}
 Flight & Airport Data: {flight_data}
 
-Provide a complete, practical flight recommendation:
-- Recommended origin & arrival hubs (with IATA codes)
-- 3-4 top commercial airlines servicing this route
-- Flight duration, layovers, and travel advice
-- Estimated round-trip price ranges (Economy vs Business)
-- Optimal booking window & ticket saving advice
-Keep structured, dense, and practical."""
+Provide a concise recommendation in at most 8 bullets:
+- Origin and arrival hubs with IATA codes
+- 2-3 airlines, duration, layovers
+- Economy fare range and one booking tip
+Do not repeat the user request or explain your reasoning."""
 
 def flight_agent(state: TravelState):
-    query = state["user_query"]
+    query = compact_data(state["user_query"], USER_QUERY_LIMIT)
     flight_data = ""
     try:
         from tools.flight_tool import search_flights
@@ -157,7 +159,7 @@ def flight_agent(state: TravelState):
         )
         if llm:
             response = llm.bind(max_tokens=FLIGHT_OUTPUT_TOKENS).invoke([
-                SystemMessage(content="You are an expert flight route specialist. Provide rich, structured analysis."),
+                SystemMessage(content="You are an expert flight route specialist. Be concise and factual."),
                 HumanMessage(content=prompt)
             ])
             flight_results = str(response.content)
@@ -176,7 +178,7 @@ def flight_agent(state: TravelState):
 # 2. Hotel Agent
 # =========================
 def hotel_agent(state: TravelState):
-    query = f"Boutique hotels, hostels, and best stays for {state['user_query']}"
+    query = f"Boutique hotels, hostels, and best stays for {compact_data(state['user_query'], USER_QUERY_LIMIT)}"
     try:
         from tools.tavily_tool import tavily_search
         raw_hotels = tavily_search(query)
@@ -198,7 +200,7 @@ def hotel_agent(state: TravelState):
 # 3. Weather Agent
 # =========================
 def weather_agent(state: TravelState):
-    city = extract_destination(state["user_query"])
+    city = extract_destination(compact_data(state["user_query"], USER_QUERY_LIMIT))
     try:
         from custom_weather_mcp_server import get_current_weather, get_forecast
         cur = get_current_weather(city)
@@ -221,20 +223,20 @@ def weather_agent(state: TravelState):
 # 4. Itinerary Agent
 # =========================
 def itinerary_agent(state: TravelState):
-    prompt = f"""Build a comprehensive, day-by-day travel itinerary based on this request.
-Request: {state['user_query']}
+    prompt = f"""Build a compact day-by-day travel itinerary based on this request.
+Request: {compact_data(state['user_query'], USER_QUERY_LIMIT)}
 Flights: {compact_data(state['flight_results'], 500)}
 Hotels: {compact_data(state['hotel_results'], 600)}
 Weather: {compact_data(state['weather_results'], 350)}
 
 Guidelines:
-- Detail Morning, Afternoon, and Evening activities for EVERY single day of the trip.
-- Specify authentic local restaurants, scenic walking paths, and iconic cultural stops.
-- Make sure EVERY day is fully written from Day 1 to the final day without stopping early."""
+- Give exactly 2 short bullets per day: one daytime activity and one evening idea.
+- Include one food or neighborhood suggestion every 2 days.
+- Fit the complete itinerary within the output limit. No filler or repeated descriptions."""
 
     if llm:
         response = llm.bind(max_tokens=ITINERARY_OUTPUT_TOKENS).invoke([
-            SystemMessage(content="You are an expert travel route architect. Provide exhaustive, structured day-by-day itineraries."),
+            SystemMessage(content="You are a concise travel route architect. Prioritize useful details over prose."),
             HumanMessage(content=prompt)
         ])
         itinerary_text = str(response.content)
@@ -251,40 +253,42 @@ Guidelines:
 # 5. Final Synthesis Agent
 # =========================
 def build_final_prompt(state: TravelState) -> str:
-    return f"""Synthesize a complete, exhaustive, and beautiful travel guide.
-User Query: {state['user_query']}
+        return f"""Synthesize a concise but useful travel plan.
+    User Query: {compact_data(state['user_query'], USER_QUERY_LIMIT)}
 
 Flights Summary:
-{compact_data(state['flight_results'], 800)}
+{compact_data(state['flight_results'], FINAL_CONTEXT_LIMIT)}
 
 Hotel Options:
-{compact_data(state['hotel_results'], 800)}
+{compact_data(state['hotel_results'], FINAL_CONTEXT_LIMIT)}
 
 Weather Forecast:
-{compact_data(state['weather_results'], 400)}
+{compact_data(state['weather_results'], 700)}
 
 Itinerary:
-{state['itinerary']}
+{compact_data(state['itinerary'], ITINERARY_CONTEXT_LIMIT)}
 
 CRITICAL INSTRUCTIONS:
-- You MUST generate the FULL response from start to finish.
-- DO NOT summarize or truncate any day. Write every day completely with Morning, Afternoon, and Evening.
+- Keep the answer under 1,800 output tokens.
+- Include every requested category, but use compact bullets and tables.
+- Use one short line for the trip summary, 3-5 bullets for flights, 3 hotel options, a short weather and packing note, and the day-by-day itinerary.
+- Do not repeat source data, the user request, or your reasoning.
 - Structure using clear Markdown:
-  # [Destination Name] Complete Travel Dossier
-  ## 1. Quick Trip Overview & Highlights
-  ## 2. Flight & Transit Plan (Airlines, Routes, Average Fares, Airport Transfers)
-  ## 3. Curated Accommodations (Budget, Boutique, and Luxury options with neighborhoods)
-  ## 4. Weather Outlook & Packing Checklist (Daily temperatures, layers, essentials)
-  ## 5. Complete Day-by-Day Itinerary (Fully fleshed out for every day requested)
-  ## 6. Budget Breakdown & Cost Estimates (Airfare, Lodging, Food, Transport, Activities)
-  ## 7. Practical Field Tips (eSIM, currency, transport cards, local etiquette)
-- Finish all sections completely."""
+    # Trip plan: [Destination]
+    ## Summary
+    ## Flights
+    ## Hotels
+    ## Weather & packing
+    ## Day-by-day itinerary
+    ## Budget
+    ## Practical tips
+Finish all sections briefly."""
 
 def final_agent(state: TravelState):
     prompt = build_final_prompt(state)
     if llm:
         response = llm.bind(max_tokens=FINAL_OUTPUT_TOKENS).invoke([
-            SystemMessage(content="You are TripMate, a premier AI travel concierge. Output thoughtful, highly detailed markdown."),
+            SystemMessage(content="You are TripMate, a concise AI travel concierge. Give short, high-signal markdown."),
             HumanMessage(content=prompt)
         ])
         content = str(response.content)
@@ -455,13 +459,13 @@ async def stream_travel_agent(user_input: str, thread_id: str | None = None):
     yield {
         "type": "thinking",
         "stage": "answer",
-        "thought": "Synthesizing full travel dossier and day-by-day breakdown...",
+        "thought": "Compressing the research into a short, complete travel plan...",
     }
     yield {
         "type": "stage",
         "stage": "answer",
         "label": "TripMate Synthesis",
-        "detail": "Writing your personalized travel guide",
+        "detail": "Writing a concise personalized travel guide",
         "status": "running",
     }
 
@@ -471,7 +475,7 @@ async def stream_travel_agent(user_input: str, thread_id: str | None = None):
     if llm:
         try:
             async for chunk in llm.bind(max_tokens=FINAL_OUTPUT_TOKENS).astream([
-                SystemMessage(content="You are TripMate, an elite travel booking concierge. Write rich, practical markdown."),
+                SystemMessage(content="You are TripMate, a concise travel booking concierge. Write short, practical markdown under 1,800 tokens."),
                 HumanMessage(content=final_prompt),
             ]):
                 token_text = chunk.content if isinstance(chunk.content, str) else ""
