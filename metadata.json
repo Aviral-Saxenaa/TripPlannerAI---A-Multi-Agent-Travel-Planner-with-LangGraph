@@ -1,0 +1,8 @@
+{
+  "name": "TripMate AI",
+  "description": "A thoughtful AI travel planner for better journeys, providing flights, hotels, weather, and day-by-day itineraries.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

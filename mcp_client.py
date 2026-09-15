@@ -49,7 +49,7 @@ WEATHER_ENV["OPENWEATHER_API_KEY"] = (
 llm = ChatGroq(
     model="openai/gpt-oss-120b",
     api_key=GROQ_API_KEY
-)
+) if GROQ_API_KEY else None
 
 
 # ==========================================
@@ -84,7 +84,7 @@ client = MultiServerMCPClient(
             # Automatically use custom_weather_mcp_server.py
             # from the current project directory.
             "args": [
-                r"C:\Users\avira\OneDrive\Desktop\Tripmate\TripPlannerAI---A-Multi-Agent-Travel-Planner-with-LangGraph\custom_weather_mcp_server.py"
+                str(WEATHER_SERVER_PATH)
             ],
 
             "env": {
