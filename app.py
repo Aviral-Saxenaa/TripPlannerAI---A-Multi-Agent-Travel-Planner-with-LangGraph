@@ -3,12 +3,13 @@ import traceback
 import uvicorn
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+import json
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from backend import run_travel_agent
+from backend import run_travel_agent, stream_travel_agent
 
 import nest_asyncio
 nest_asyncio.apply()
@@ -80,7 +81,6 @@ async def travel_planner(request_data: TravelRequest):
                 "llm_calls": result["llm_calls"],
             }
         )
-
     except Exception as e:
         print("ERROR:", e)
         traceback.print_exc()
@@ -94,6 +94,26 @@ async def travel_planner(request_data: TravelRequest):
         )
 
 
+@app.post("/api/travel/stream")
+async def travel_planner_stream(request_data: TravelRequest):
+    user_message = request_data.message.strip()
+    if not user_message:
+        async def empty_error():
+            yield f"data: {json.dumps({'type': 'error', 'error': 'Message cannot be empty.'})}\n\n"
+        return StreamingResponse(empty_error(), media_type="text/event-stream")
+
+    async def events():
+        try:
+            async for event in stream_travel_agent(user_message, request_data.thread_id):
+                yield f"data: {json.dumps(event, default=str)}\n\n"
+        except Exception as error:
+            yield f"data: {json.dumps({'type': 'error', 'error': str(error)})}\n\n"
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 @app.get("/health")
 async def health_check():

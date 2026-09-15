@@ -11,6 +11,8 @@ from typing import TypedDict, Annotated
 import operator
 import uuid
 import asyncio
+import json
+import re
 import psycopg
 from psycopg.rows import dict_row
 
@@ -26,6 +28,21 @@ from langchain_groq import ChatGroq
 # from tools.tavily_tool import tavily_search
 # from tools.flight_tool import search_flights
 from mcp_client import tavily_mcp_search, aviation_mcp_call, extract_destination, forecast_mcp_search, weather_mcp_search
+
+
+# Keep the combined generated output below the free-model allowance.
+FLIGHT_OUTPUT_TOKENS = 900
+ITINERARY_OUTPUT_TOKENS = 1700
+FINAL_OUTPUT_TOKENS = 5000
+TOTAL_OUTPUT_TOKENS = FLIGHT_OUTPUT_TOKENS + ITINERARY_OUTPUT_TOKENS + FINAL_OUTPUT_TOKENS
+
+
+def compact_data(value: object, limit: int = 5000) -> str:
+    """Preserve useful tool content while preventing huge prompt payloads."""
+    text = str(value).replace("\x00", " ").strip()
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}\n[Additional tool output omitted for context size.]"
 
 
 def get_database_url():
@@ -146,11 +163,11 @@ def flight_agent(state: TravelState):
 
         prompt = FLIGHT_AGENT_PROMPT.format(
             query=query,
-            airport_data=str(airports)[:3000],
-            airline_data=str(airlines)[:3000]
+            airport_data=compact_data(airports, 2600),
+            airline_data=compact_data(airlines, 2600)
         )
 
-        response = llm.invoke([
+        response = llm.bind(max_tokens=FLIGHT_OUTPUT_TOKENS).invoke([
             SystemMessage(
                 content="You are an expert travel flight planner."
             ),
@@ -184,7 +201,7 @@ def flight_agent(state: TravelState):
 def hotel_agent(state: TravelState):
     query = f"Best hotels for {state['user_query']}"
     # hotel_results = tavily_search(query)
-    hotel_results = asyncio.run(tavily_mcp_search(query))
+    hotel_results = compact_data(asyncio.run(tavily_mcp_search(query)), 6000)
 
     return {
         "hotel_results": hotel_results,
@@ -205,13 +222,13 @@ def weather_agent(state: TravelState):
 
     city = extract_destination(state["user_query"])
 
-    weather_data = asyncio.run(
+    weather_data = compact_data(asyncio.run(
         weather_mcp_search(city)
-    )
+    ), 2500)
 
-    forecast_data = asyncio.run(
+    forecast_data = compact_data(asyncio.run(
         forecast_mcp_search(city)
-    )
+    ), 2500)
 
     return {
         "weather_results": f"""
@@ -254,7 +271,7 @@ Weather Results:
 Make the itinerary practical, budget-aware, and easy to follow.
 """
 
-    response = llm.invoke([
+    response = llm.bind(max_tokens=ITINERARY_OUTPUT_TOKENS).invoke([
         SystemMessage(content="You are an expert travel planner."),
         HumanMessage(content=prompt)
     ])
@@ -308,7 +325,7 @@ Important:
 - Keep the response useful for real travel planning.
 """
 
-    response = llm.invoke([
+    response = llm.bind(max_tokens=FINAL_OUTPUT_TOKENS).invoke([
         SystemMessage(content="You are a professional AI travel booking assistant."),
         HumanMessage(content=final_prompt)
     ])
@@ -396,4 +413,104 @@ def run_travel_agent(user_input: str, thread_id: str | None = None):
         "weather_results": result.get("weather_results", ""),
         "itinerary": result.get("itinerary", ""),
         "llm_calls": result.get("llm_calls", 0),
+    }
+
+
+def build_final_prompt(state: TravelState) -> str:
+    return f"""
+Generate the final travel response for the user.
+
+User Request:
+{state['user_query']}
+
+Flights:
+{state['flight_results']}
+
+Hotels:
+{state['hotel_results']}
+
+Weather:
+{state['weather_results']}
+
+Itinerary:
+{state['itinerary']}
+
+Format the final answer beautifully using these sections:
+
+1. Trip Summary
+2. Flight Information
+3. Hotel Suggestions
+4. Weather Information
+5. Day-by-Day Itinerary
+6. Estimated Budget
+7. Final Recommendations
+
+Important:
+- Be clear and practical.
+- Mention that live flight API may not provide ticket prices if pricing is unavailable.
+- Include weather-based travel advice.
+- Keep the response useful for real travel planning.
+"""
+
+
+def extract_urls(value: object) -> list[str]:
+    """Return unique http(s) links from tool output for live source cards."""
+    return list(dict.fromkeys(re.findall(r"https?://[^\s)\\\"']+", str(value))))
+
+
+async def stream_travel_agent(user_input: str, thread_id: str | None = None):
+    """Run the travel workflow while yielding progress and answer tokens."""
+    if not thread_id:
+        thread_id = f"user_{uuid.uuid4().hex}"
+
+    state: TravelState = {
+        "messages": [HumanMessage(content=user_input)],
+        "user_query": user_input,
+        "flight_results": "",
+        "hotel_results": "",
+        "weather_results": "",
+        "itinerary": "",
+        "llm_calls": 0,
+    }
+    stages = [
+        ("flights", "Flight scout", "Comparing routes, airports, and airlines", flight_agent),
+        ("hotels", "Stay curator", "Finding places that fit your trip", hotel_agent),
+        ("weather", "Weather check", "Reading the forecast for your dates", weather_agent),
+        ("itinerary", "Route designer", "Shaping the days around your priorities", itinerary_agent),
+    ]
+
+    yield {"type": "start", "thread_id": thread_id}
+    for key, label, detail, agent in stages:
+        yield {"type": "stage", "stage": key, "label": label, "detail": detail, "status": "running"}
+        try:
+            update = await asyncio.to_thread(agent, state)
+            state.update(update)
+            yield {"type": "stage", "stage": key, "label": label, "detail": "Complete", "status": "complete"}
+            for url in extract_urls(update):
+                yield {"type": "source", "url": url, "stage": key}
+        except Exception as error:
+            yield {"type": "stage", "stage": key, "label": label, "detail": str(error), "status": "error"}
+            raise
+
+    yield {"type": "stage", "stage": "answer", "label": "TripMate", "detail": "Writing your final field notes", "status": "running"}
+    answer_parts: list[str] = []
+    async for chunk in llm.bind(max_tokens=FINAL_OUTPUT_TOKENS).astream([
+        SystemMessage(content="You are a professional AI travel booking assistant."),
+        HumanMessage(content=build_final_prompt(state)),
+    ]):
+        content = chunk.content if isinstance(chunk.content, str) else ""
+        if content:
+            answer_parts.append(content)
+            yield {"type": "token", "content": content}
+
+    final_answer = "".join(answer_parts)
+    yield {
+        "type": "done",
+        "thread_id": thread_id,
+        "answer": final_answer,
+        "flight_results": state["flight_results"],
+        "hotel_results": state["hotel_results"],
+        "weather_results": state["weather_results"],
+        "itinerary": state["itinerary"],
+        "llm_calls": state.get("llm_calls", 0) + 1,
     }

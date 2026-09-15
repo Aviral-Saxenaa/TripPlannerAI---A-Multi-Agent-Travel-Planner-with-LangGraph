@@ -17,6 +17,10 @@ function App() {
     const [error, setError] = useState("");
     const [plan, setPlan] = useState(null);
     const [copied, setCopied] = useState(false);
+    const [thinking, setThinking] = useState(false);
+    const [stages, setStages] = useState([]);
+    const [sources, setSources] = useState([]);
+    const [streamedAnswer, setStreamedAnswer] = useState("");
     const inputRef = useRef(null);
 
     useEffect(() => {
@@ -42,7 +46,11 @@ function App() {
 
         setLoading(true);
         try {
-            const response = await fetch("/api/travel", {
+            setThinking(true);
+            setStages([]);
+            setSources([]);
+            setStreamedAnswer("");
+            const response = await fetch("/api/travel/stream", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -50,15 +58,37 @@ function App() {
                     thread_id: localStorage.getItem("travel_thread_id") || null
                 })
             });
-            const data = await response.json();
-            if (!response.ok || !data.success) throw new Error(data.error || "Something went wrong.");
-            localStorage.setItem("travel_thread_id", data.thread_id);
-            setPlan(data);
+            if (!response.ok || !response.body) throw new Error("The travel stream could not be started.");
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let completedPlan = null;
+            while (true) {
+                const { value, done } = await reader.read();
+                buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+                const events = buffer.split("\n\n");
+                buffer = events.pop() || "";
+                for (const rawEvent of events) {
+                    const line = rawEvent.split("\n").find((item) => item.startsWith("data: "));
+                    if (!line) continue;
+                    const event = JSON.parse(line.slice(6));
+                    if (event.type === "start") localStorage.setItem("travel_thread_id", event.thread_id);
+                    if (event.type === "stage") setStages((current) => [...current.filter((item) => item.stage !== event.stage), event]);
+                    if (event.type === "source") setSources((current) => current.includes(event.url) ? current : [...current, event.url]);
+                    if (event.type === "token") setStreamedAnswer((current) => current + event.content);
+                    if (event.type === "done") completedPlan = event;
+                    if (event.type === "error") throw new Error(event.error || "Something went wrong.");
+                }
+                if (done) break;
+            }
+            if (!completedPlan) throw new Error("The travel plan ended before a final answer was received.");
+            setPlan(completedPlan);
             window.setTimeout(() => document.getElementById("plan-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
         } catch (requestError) {
             setError(requestError.message || "We couldn’t generate your plan. Please try again.");
         } finally {
             setLoading(false);
+            setThinking(false);
         }
     };
 
@@ -114,6 +144,8 @@ function App() {
                 </section>
 
                 {error && <div className="error-notice" role="alert"><Icon name="circle-alert" size={18} /><span>{error}</span><button onClick={() => setError("")} aria-label="Dismiss error"><Icon name="x" size={17} /></button></div>}
+
+                {thinking && <section className="thinking-panel" aria-live="polite"><div className="thinking-header"><span className="thinking-orbit"><Icon name="sparkles" size={16} /></span><div><span className="section-index">LIVE / TRIPMATE IS THINKING</span><h2>{streamedAnswer ? "Writing your field notes" : "Building your route"}</h2></div></div><div className="thinking-grid">{stages.map((stage) => <div className={`thinking-stage ${stage.status}`} key={stage.stage}><span className="stage-icon">{stage.status === "complete" ? <Icon name="check" size={14} /> : stage.status === "error" ? <Icon name="circle-alert" size={14} /> : <span className="stage-pulse" />}</span><span><strong>{stage.label || stage.stage}</strong><small>{stage.detail || "Working..."}</small></span></div>)}</div>{sources.length > 0 && <div className="sources-row"><span>LIVE SOURCES</span>{sources.map((source) => <a href={source} target="_blank" rel="noreferrer" key={source}><Icon name="external-link" size={12} /> {new URL(source).hostname}</a>)}</div>}<div className="stream-preview">{streamedAnswer ? <span dangerouslySetInnerHTML={{ __html: window.marked?.parse(streamedAnswer) || streamedAnswer }} /> : <span className="waiting-dots">Gathering the useful details<span>.</span><span>.</span><span>.</span></span>}</div></section>}
 
                 {plan && <section className="result-panel" id="plan-result"><div className="result-top"><div><span className="section-index">02 / YOUR ROUTE</span><h2>A plan made for you.</h2><p className="thread-id">Saved to your travel thread · {plan.thread_id}</p></div><div className="result-actions"><button className="icon-button" onClick={copyPlan} title="Copy plan"><Icon name={copied ? "check" : "copy"} size={16} /> <span>{copied ? "Copied" : "Copy"}</span></button><button className="dark-button" onClick={downloadPlan}><Icon name="download" size={16} /> PDF</button></div></div><div className="plan-paper" id="pdf-content"><div className="paper-heading"><span className="paper-kicker">TRIPMATE FIELD NOTES</span><span className="paper-rule" /><span className="paper-date">CURATED FOR YOU</span></div><article className="result-box" dangerouslySetInnerHTML={renderAnswer(plan.answer)} /></div></section>}
             </main>

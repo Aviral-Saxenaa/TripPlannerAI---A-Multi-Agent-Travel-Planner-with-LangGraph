@@ -502,6 +502,176 @@ button {
     display: inline-flex;
 }
 
+.thinking-panel {
+    background: #e5eadf;
+    border: 1px solid rgba(72, 98, 83, .23);
+    margin: 28px auto 0;
+    max-width: 1160px;
+    padding: 28px 38px;
+}
+
+.thinking-header {
+    align-items: center;
+    display: flex;
+    gap: 13px;
+}
+
+.thinking-header h2 {
+    font-family: var(--serif);
+    font-size: 1.55rem;
+    font-weight: 600;
+    letter-spacing: -.04em;
+    margin-top: 6px;
+}
+
+.thinking-orbit {
+    align-items: center;
+    animation: orbit 2.2s ease-in-out infinite;
+    background: var(--lime);
+    border-radius: 50%;
+    color: var(--ink);
+    display: inline-flex;
+    height: 33px;
+    justify-content: center;
+    width: 33px;
+}
+
+.thinking-grid {
+    border-top: 1px solid rgba(72, 98, 83, .18);
+    display: grid;
+    gap: 0;
+    grid-template-columns: repeat(4, 1fr);
+    margin-top: 24px;
+    padding-top: 19px;
+}
+
+.thinking-stage {
+    align-items: flex-start;
+    border-right: 1px solid rgba(72, 98, 83, .16);
+    display: flex;
+    gap: 9px;
+    min-height: 49px;
+    padding: 0 17px;
+}
+
+.thinking-stage:first-child {
+    padding-left: 0;
+}
+
+.thinking-stage:last-child {
+    border-right: 0;
+}
+
+.stage-icon {
+    align-items: center;
+    background: rgba(72, 98, 83, .1);
+    border-radius: 50%;
+    color: var(--moss);
+    display: inline-flex;
+    height: 23px;
+    justify-content: center;
+    width: 23px;
+}
+
+.thinking-stage.running .stage-icon {
+    background: var(--lime);
+}
+
+.thinking-stage strong,
+.thinking-stage small {
+    display: block;
+}
+
+.thinking-stage strong {
+    font-size: .76rem;
+}
+
+.thinking-stage small {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: .57rem;
+    line-height: 1.35;
+    margin-top: 4px;
+}
+
+.stage-pulse {
+    animation: pulse 1.15s infinite;
+    background: var(--moss);
+    border-radius: 50%;
+    height: 7px;
+    width: 7px;
+}
+
+.sources-row {
+    align-items: center;
+    border-top: 1px solid rgba(72, 98, 83, .18);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 21px;
+    padding-top: 16px;
+}
+
+.sources-row>span {
+    color: var(--moss);
+    font-family: var(--mono);
+    font-size: .59rem;
+    letter-spacing: .12em;
+    margin-right: 5px;
+}
+
+.sources-row a {
+    align-items: center;
+    background: rgba(255, 255, 255, .6);
+    border: 1px solid rgba(72, 98, 83, .17);
+    color: var(--moss);
+    display: inline-flex;
+    font-family: var(--mono);
+    font-size: .6rem;
+    gap: 5px;
+    max-width: 220px;
+    overflow: hidden;
+    padding: 6px 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stream-preview {
+    background: rgba(255, 255, 255, .57);
+    border-left: 3px solid #a8bf3d;
+    color: #3b4b41;
+    font-size: .9rem;
+    line-height: 1.65;
+    margin-top: 23px;
+    max-height: 220px;
+    overflow: hidden;
+    padding: 13px 17px;
+}
+
+.stream-preview p {
+    margin-bottom: 8px;
+}
+
+.stream-preview h1,
+.stream-preview h2,
+.stream-preview h3 {
+    font-family: var(--serif);
+    font-size: 1.1rem;
+    margin: 7px 0;
+}
+
+.waiting-dots span {
+    animation: blink 1.2s infinite;
+}
+
+.waiting-dots span:nth-child(2) {
+    animation-delay: .2s;
+}
+
+.waiting-dots span:nth-child(3) {
+    animation-delay: .4s;
+}
+
 .result-panel {
     margin-top: 80px;
     padding: 35px 38px 38px;
@@ -627,7 +797,7 @@ button {
     color: var(--ink);
 }
 
-+footer {
+footer {
     border-top: 1px solid var(--line);
     color: var(--muted);
     display: flex;
@@ -641,13 +811,13 @@ button {
     text-transform: uppercase;
 }
 
-+@keyframes spin {
+@keyframes spin {
     to {
         transform: rotate(360deg);
     }
 }
 
-+@media (max-width: 780px) {
+@media (max-width: 780px) {
     .topbar {
         padding: 18px 20px;
     }
@@ -686,7 +856,8 @@ button {
     }
 
     .planner-panel,
-    .result-panel {
+    .result-panel,
+    .thinking-panel {
         padding: 23px 18px;
     }
 
@@ -758,7 +929,32 @@ button {
     }
 }
 
-+@media print {
+@keyframes pulse {
+    50% {
+        opacity: .35;
+        transform: scale(.7);
+    }
+}
+
+@keyframes blink {
+
+    0%,
+    100% {
+        opacity: .2;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+@keyframes orbit {
+    50% {
+        transform: rotate(18deg) scale(1.08);
+    }
+}
+
+@media print {
     body {
         background: white;
     }
