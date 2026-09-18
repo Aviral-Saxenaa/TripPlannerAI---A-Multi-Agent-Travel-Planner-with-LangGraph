@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 import traceback
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from backend import run_travel_agent, stream_travel_agent
+from backend import run_travel_agent, resume_travel_agent, stream_travel_agent
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -43,6 +44,12 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 class TravelRequest(BaseModel):
     message: str
     thread_id: str | None = None
+
+
+class ApprovalRequest(BaseModel):
+    thread_id: str
+    approved: bool
+    feedback: str = ""
 
 @app.get("/", response_class=HTMLResponse)
 @app.get("/dossier", response_class=HTMLResponse)
@@ -115,6 +122,23 @@ async def travel_planner_stream(request_data: TravelRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.post("/api/travel/approval")
+async def travel_planner_approval(request_data: ApprovalRequest):
+    """Resume a paused plan after the user approves or requests a revision."""
+    try:
+        result = await asyncio.to_thread(
+            resume_travel_agent,
+            request_data.thread_id,
+            request_data.approved,
+            request_data.feedback,
+        )
+        return JSONResponse(content={"success": True, **result})
+    except Exception as error:
+        print("APPROVAL ERROR:", error)
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"success": False, "error": str(error)})
 
 @app.get("/health")
 async def health_check():

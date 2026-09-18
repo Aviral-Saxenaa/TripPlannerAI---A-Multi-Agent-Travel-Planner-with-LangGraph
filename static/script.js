@@ -154,14 +154,14 @@ function extractMarkdownSection(fullText, sectionKeyword) {
 function App() {
   // Navigation view: 'home' | 'dossier'
   const [view, setView] = useState("home");
-  const [activeTab, setActiveTab] = useState("full"); // 'full' | 'flights' | 'hotels' | 'weather' | 'itinerary' | 'sources'
+  const [activeTab, setActiveTab] = useState("full"); // 'full' | 'flights' | 'hotels' | 'weather' | 'budget' | 'itinerary' | 'sources'
   const [fullscreen, setFullscreen] = useState(false);
 
   const [message, setMessage] = useState("");
   const [activeQuery, setActiveQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  
+
   // Real-time Perplexity-style streaming state
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const [thoughts, setThoughts] = useState([]);
@@ -169,6 +169,9 @@ function App() {
   const [sources, setSources] = useState([]);
   const [streamedAnswer, setStreamedAnswer] = useState("");
   const [completedPlan, setCompletedPlan] = useState(null);
+  const [approvalRequest, setApprovalRequest] = useState(null);
+  const [approvalFeedback, setApprovalFeedback] = useState("");
+  const [approvalLoading, setApprovalLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const inputRef = useRef(null);
@@ -218,12 +221,15 @@ function App() {
     setActiveQuery(queryToSubmit);
     setStreamedAnswer("");
     setCompletedPlan(null);
+    setApprovalRequest(null);
+    setApprovalFeedback("");
     setActiveTab("full");
     setThoughts([]);
     setStages([
       { stage: "flights", label: "Flight Scout", detail: "Scouting routes & airfares", status: "running" },
       { stage: "hotels", label: "Stay Curator", detail: "Curating boutique accommodations", status: "pending" },
       { stage: "weather", label: "Weather Check", detail: "Checking meteorological forecasts", status: "pending" },
+      { stage: "budget", label: "Budget Analyst", detail: "Checking feasibility and cost risks", status: "pending" },
       { stage: "itinerary", label: "Route Designer", detail: "Architecting daily schedule", status: "pending" },
       { stage: "answer", label: "TripMate Synthesis", detail: "Writing field dossier", status: "pending" },
     ]);
@@ -305,6 +311,14 @@ function App() {
               setThinkingOpen(false);
             }
 
+            if (event.type === "approval") {
+              finishedPlan = event;
+              setCompletedPlan(event);
+              setApprovalRequest(event);
+              setStreamedAnswer(event.answer || event.itinerary || "");
+              setThinkingOpen(false);
+            }
+
             if (event.type === "error") {
               throw new Error(event.error || "An error occurred during generation.");
             }
@@ -324,6 +338,37 @@ function App() {
       setError(err.message || "Could not generate travel plan. Please verify your connection.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const submitApproval = async (approved) => {
+    const threadId = localStorage.getItem("tripmate_thread_id");
+    if (!threadId || !approvalRequest) return;
+
+    setApprovalLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/travel/approval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          thread_id: threadId,
+          approved,
+          feedback: approvalFeedback,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Unable to resume the travel plan.");
+      }
+      setCompletedPlan(result);
+      setStreamedAnswer(result.answer || "");
+      setApprovalRequest(result.requires_approval ? result : null);
+      setApprovalFeedback("");
+    } catch (err) {
+      setError(err.message || "Unable to submit your review.");
+    } finally {
+      setApprovalLoading(false);
     }
   };
 
@@ -421,6 +466,20 @@ function App() {
           <div className="tab-empty-state">
             <SvgIcon name="cloudSun" size={28} />
             <p>Weather radar is scanning seasonal conditions and packing tips...</p>
+          </div>
+        );
+      }
+      const html = window.marked ? window.marked.parse(section) : section;
+      return <div className="markdown-body" dangerouslySetInnerHTML={{ __html: html }} />;
+    }
+
+    if (activeTab === "budget") {
+      const section = extractMarkdownSection(fullText, "Budget") || completedPlan?.budget_results;
+      if (!section) {
+        return (
+          <div className="tab-empty-state">
+            <SvgIcon name="fileText" size={28} />
+            <p>Budget analyst is checking trip feasibility and cost risks...</p>
           </div>
         );
       }
@@ -730,6 +789,32 @@ function App() {
             )}
           </div>
 
+          {approvalRequest && (
+            <section className="approval-panel" aria-live="polite">
+              <div>
+                <span className="document-kicker">Human review required</span>
+                <h2>Check the draft before TripMate finalizes it</h2>
+                <p>{approvalRequest.approval_request || "Review the itinerary and approve it, or tell TripMate what to revise."}</p>
+              </div>
+              <textarea
+                className="approval-feedback"
+                value={approvalFeedback}
+                onChange={(event) => setApprovalFeedback(event.target.value)}
+                placeholder="Optional revision feedback"
+                rows={3}
+                disabled={approvalLoading}
+              />
+              <div className="approval-actions">
+                <button className="command-btn" onClick={() => submitApproval(false)} disabled={approvalLoading}>
+                  Request changes
+                </button>
+                <button className="command-btn primary" onClick={() => submitApproval(true)} disabled={approvalLoading}>
+                  {approvalLoading ? "Submitting..." : "Approve itinerary"}
+                </button>
+              </div>
+            </section>
+          )}
+
           {/* Dedicated Section Tabs */}
           <div className="dossier-tabs-nav">
             <button
@@ -759,6 +844,13 @@ function App() {
             >
               <SvgIcon name="cloudSun" size={15} />
               <span>Weather & Packing</span>
+            </button>
+            <button
+              className={`dossier-tab ${activeTab === "budget" ? "active" : ""}`}
+              onClick={() => setActiveTab("budget")}
+            >
+              <SvgIcon name="fileText" size={15} />
+              <span>Budget Check</span>
             </button>
             <button
               className={`dossier-tab ${activeTab === "itinerary" ? "active" : ""}`}
