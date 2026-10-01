@@ -1454,3 +1454,182 @@ button {
     color: #000;
   }
 }
+
+@media (max-width: 768px) {
+  .topbar {
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .topbar-left,
+  .topbar-meta {
+    min-width: 0;
+  }
+
+  .topbar-left {
+    flex: 1;
+    flex-wrap: wrap;
+  }
+
+  .topbar-search-chip {
+    flex: 1 1 150px;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .topbar-meta {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .status-pill {
+    white-space: nowrap;
+  }
+
+  .main-wrapper {
+    padding: 28px 16px 56px;
+  }
+
+  .composer-card {
+    padding: 14px 16px;
+  }
+
+  .composer-bottom {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .composer-hints {
+    flex-wrap: wrap;
+  }
+
+  .send-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .site-footer {
+    flex-wrap: wrap;
+    padding: 24px 16px;
+    gap: 6px 12px;
+  }
+
+  .dossier-page-layout {
+    padding: 12px 12px 48px;
+    gap: 12px;
+  }
+
+  .dossier-command-bar,
+  .live-agent-banner {
+    padding: 12px;
+  }
+
+  .dossier-command-left {
+    width: 100%;
+  }
+
+  .destination-badge {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .destination-badge span {
+    overflow-wrap: anywhere;
+  }
+
+  .dossier-command-actions {
+    width: 100%;
+  }
+
+  .dossier-command-actions .command-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .agent-banner-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .agent-banner-left {
+    flex-wrap: wrap;
+  }
+
+  .dossier-main-card {
+    min-height: 360px;
+    padding: 24px 18px;
+  }
+
+  .skeleton-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .markdown-body {
+    overflow-wrap: anywhere;
+  }
+
+  .markdown-body table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .followup-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .followup-btn {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .brand-text {
+    font-size: 1.1rem;
+  }
+
+  .topbar {
+    flex-direction: column;
+  }
+
+  .topbar-left,
+  .topbar-meta {
+    width: 100%;
+  }
+
+  .topbar-meta {
+    justify-content: flex-start;
+  }
+
+  .back-nav-btn {
+    padding-inline: 9px;
+  }
+
+  .hero-title {
+    font-size: 1.6rem;
+  }
+
+  .hero-subtitle {
+    font-size: 0.9rem;
+  }
+
+  .dossier-command-actions .command-btn {
+    flex-basis: 100%;
+  }
+
+  .document-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .action-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
