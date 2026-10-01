@@ -1473,9 +1473,12 @@ button {
   }
 
   .topbar-search-chip {
-    flex: 1 1 150px;
+    flex: 0 1 380px;
+    align-self: center;
+    height: 38px;
     min-width: 0;
     max-width: none;
+    width: 100%;
   }
 
   .topbar-meta {
@@ -1605,6 +1608,12 @@ button {
 
   .topbar-meta {
     justify-content: flex-start;
+  }
+
+  .topbar-search-chip {
+    flex: 0 0 40px;
+    height: 40px;
+    width: 100%;
   }
 
   .back-nav-btn {
